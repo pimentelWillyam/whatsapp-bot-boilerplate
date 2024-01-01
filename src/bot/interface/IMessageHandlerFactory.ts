@@ -1,7 +1,8 @@
-import { type IMessageListener } from './IMessageListener'
+import { type WhatsappClient } from '../type/WhatsappClient'
+import { type IMessageHandler } from './IMessageHandler'
 
-interface IMessageListenerFactory {
-  fabricate: () => IMessageListener
+interface IMessageHandlerFactory {
+  fabricate: (client: WhatsappClient) => IMessageHandler
 }
 
-export type { IMessageListenerFactory }
+export type { IMessageHandlerFactory }
