@@ -8,3 +8,5 @@ node_modules
 src/testing.ts
 file
 tokens
+yarn.lock
+yarn-error.log
