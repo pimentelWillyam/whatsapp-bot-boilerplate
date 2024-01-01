@@ -1,8 +1,7 @@
 import { type Bot } from '../factory/BotFactory'
-import { type IMessageHandler } from './IMessageListener'
 
 interface IBotFactory {
-  fabricate: (messageHandler: IMessageHandler) => Bot
+  fabricate: (sessionName: string) => Promise<Bot>
 }
 
 export type { IBotFactory }
