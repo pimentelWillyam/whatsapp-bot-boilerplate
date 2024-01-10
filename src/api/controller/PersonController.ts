@@ -24,11 +24,12 @@ class PersonController implements IPersonController {
     }
   }
 
-  getAll (res: Response): Response<any, Record<string, any>> {
+  async getAll (res: Response): Promise<Response<any, Record<string, any>>> {
     try {
-      const personList = this.personService.getAll()
+      const personList = await this.personService.getAll()
       return res.status(200).json(personList)
     } catch (error) {
+      console.error(error)
       if (error instanceof KnownError) {
         return res.status(error.status).send({ name: error.name, message: error.message })
       }
