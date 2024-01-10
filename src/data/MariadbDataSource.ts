@@ -1,122 +1,121 @@
-import config from '../config'
+import { createPool } from 'mariadb'
+import type { Pool, PoolConnection } from 'mariadb'
+import { type DatabasePerson } from './model/DatabasePerson'
+import { mariadbQueries } from './queries/mariadbQueries'
+import { type DatabaseType } from './type/DatabaseType'
+import { type TableType } from './type/TableType'
+import { type IMariadbDataSource } from './interface/IMariadbDataSource'
+import type Person from '../api/entity/Person'
 
-import * as mariadb from 'mariadb'
-import type { Connection, Pool } from 'mariadb'
-import { type Servant } from '../factories/ServantFactory'
+class MariadbDataSource implements IMariadbDataSource {
+  private readonly pool: Pool
 
-class MariadbDataSource {
-  private connection: Connection | undefined
-  private pool: Pool | undefined
+  constructor (private readonly hostAddress: string, private readonly port: number, private readonly userName: string, private readonly password: string, private readonly connectionLimit: number) {
+    console.log(hostAddress, port, userName, password, connectionLimit)
+    this.pool = createPool({ host: this.hostAddress, port: this.port, user: this.userName, password: this.password, connectionLimit: this.connectionLimit })
+  }
 
-  async bootstrap (): Promise<boolean> {
-    await this.openConnectionPool()
+  async start (): Promise<void> {
+    await this.bootstrap()
+    console.log('Database started')
+  }
+
+  async stop (): Promise<void> {
+    await this.endConnectionPool()
+    console.log('Database stopped')
+  }
+
+  private async getConnectionFromPool (): Promise<PoolConnection> {
+    return await this.pool.getConnection()
+  }
+
+  private async releaseConnection (connection: PoolConnection): Promise<void> {
+    await connection.end()
+  }
+
+  private async bootstrap (): Promise<void> {
     await this.createNecessaryDatabases()
-    await this.useMotionBladeDatabase()
-    await this.createNecessaryTables()
-    return true
+    await this.useDatabase('boilerplate')
+    await this.createTables()
   }
 
-  async startConnection (): Promise<boolean> {
-    this.connection = await mariadb.createConnection({ host: config.mariadb.host, user: config.mariadb.username, password: config.mariadb.password })
-    return true
-  }
-
-  async stopConnection (): Promise<boolean> {
-    if (this.connection === undefined) {
-      return false
-    }
-    await this.connection.end()
-    return true
-  }
-
-  async openConnectionPool (): Promise<boolean> {
-    this.pool = mariadb.createPool({ host: config.mariadb.host, user: config.mariadb.username, password: config.mariadb.password })
-    return true
-  }
-
-  async closeConnectionPool (): Promise<boolean> {
-    if (this.pool === undefined) {
-      return false
-    }
+  private async endConnectionPool (): Promise<void> {
     await this.pool.end()
-    return true
   }
 
-  async createNecessaryDatabases (): Promise<boolean> {
-    if (!await this.motionBladeDatabaseExists()) await this.createMotionBladeDatabase()
-    return true
+  private async createNecessaryDatabases (): Promise<void> {
+    await this.createBoilerplateDatabase()
   }
 
-  async createMotionBladeDatabase (): Promise<boolean> {
-    await this.pool?.query('CREATE DATABASE motion_blade ;')
-    return true
+  async createBoilerplateDatabase (): Promise<void> {
+    const connection = await this.getConnectionFromPool()
+    await connection.query(mariadbQueries.createBoilerplateDatabase)
+    await this.releaseConnection(connection)
   }
 
-  async useMotionBladeDatabase (): Promise<boolean> {
-    await this.pool?.query('USE motion_blade ;')
-    return true
+  private async useDatabase (databaseName: DatabaseType): Promise<void> {
+    const connection = await this.getConnectionFromPool()
+    await connection.query(mariadbQueries.useBoilerplateDatabase)
+    await this.releaseConnection(connection)
   }
 
-  async motionBladeDatabaseExists (): Promise<boolean> {
-    const databaseList = await this.pool?.query("SHOW DATABASES LIKE 'motion_blade' ;")
-    if (databaseList.length === 0) {
-      return false
+  private async createTable (tableName: TableType): Promise<void> {
+    const connection = await this.getConnectionFromPool()
+    switch (tableName) {
+      case 'person':
+
+        await connection.query(mariadbQueries.createPersonTable)
+        await this.releaseConnection(connection)
+
+        return
+      default:
+        await this.releaseConnection(connection)
+        throw new Error(`Invalid table name: ${tableName as string}`)
     }
+  }
+
+  private async createTables (): Promise<boolean> {
+    await this.createTable('person')
     return true
   }
 
-  async createServantTable (): Promise<boolean> {
-    const query = "CREATE TABLE `servant` (`id` UUID NOT NULL, `masterId` VARCHAR(50) NOT NULL DEFAULT '', `name` VARCHAR(50) NOT NULL DEFAULT '', `fatherProfession` VARCHAR(50) NOT NULL DEFAULT '', `youthProfession` VARCHAR(50) NOT NULL DEFAULT '', `currentAttributes` JSON NOT NULL, `maximumAttributes` JSON NOT NULL, `guard` SMALLINT NOT NULL DEFAULT 0, `buff` SMALLINT NOT NULL DEFAULT 0, `debuff` SMALLINT NOT NULL DEFAULT 0, `inventory` JSON NOT NULL, `maestry` JSON NOT NULL)COLLATE='latin1_swedish_ci';"
-
-    await this.pool?.query(query)
-
-    return true
+  async insertPersonRegistry (person: Person): Promise<DatabasePerson> {
+    const connection = await this.getConnectionFromPool()
+    await connection.query(mariadbQueries.insertPersonRegistry, [person.id, person.name, person.email, person.age])
+    await this.releaseConnection(connection)
+    return person
   }
 
-  async tableExists (tableName: string): Promise<boolean> {
-    const res = await this.pool?.query("SHOW TABLES FROM motion_blade LIKE '" + tableName + "' ;")
-    if (res[0] == null) {
-      return false
-    }
-    return true
+  async fetchEveryPersonRegistry (): Promise<DatabasePerson[]> {
+    const connection = await this.getConnectionFromPool()
+    const personList = await connection.query(mariadbQueries.fetchEveryPersonRegistry)
+    await this.releaseConnection(connection)
+    return personList
   }
 
-  async createNecessaryTables (): Promise<boolean> {
-    if (!await this.tableExists('servant')) await this.createServantTable()
-    return true
+  async fetchPersonBy (parameter: string, parameterValue: string): Promise<DatabasePerson | null> {
+    const connection = await this.getConnectionFromPool()
+    const personList = await connection.query(mariadbQueries.fetchPersonRegistryBy, [parameter, parameterValue])
+    console.log(personList)
+    await this.releaseConnection(connection)
+    if (personList[0] === undefined) return null
+    else return personList[0]
   }
 
-  async insertServantRegistry (servant: Servant): Promise<Servant> {
-    const query = 'INSERT INTO motion_blade.servant (id, masterId, name, fatherProfession, youthProfession, currentAttributes, maximumAttributes, guard, buff, debuff, inventory, maestry) VALUES (?,?,?,?,?,?,?,?,?,?,?,?);'
-    await this.pool?.query(query, [servant.id, servant.masterId, servant.name, servant.fatherProfession, servant.youthProfession, servant.currentAttributes, servant.maximumAttributes, servant.guard, servant.buff, servant.debuff, servant.inventory, servant.maestry])
-
-    return servant
+  async updatePersonBy (parameter: string, parameterValue: string, personToUpdate: Person): Promise<DatabasePerson> {
+    const connection = await this.getConnectionFromPool()
+    await connection.query(mariadbQueries.updatePersonRegistryBy, [personToUpdate.id, personToUpdate.name, personToUpdate.email, personToUpdate.age, parameter, parameterValue])
+    await this.releaseConnection(connection)
+    return personToUpdate
   }
 
-  async fetchEveryServantRegistry (): Promise<Servant[]> {
-    return await this.pool?.query('SELECT * FROM motion_blade.servant ;') as Servant[]
-  }
-
-  async fetchServantBy (parameter: string, parameterValue: string): Promise<Servant | null> {
-    const servantList = await this.pool?.query(`SELECT * FROM motion_blade.servant WHERE ${parameter} = '${parameterValue}' ;`)
-    if (servantList[0] === undefined) return null
-    else return servantList[0] as Servant
-  }
-
-  async updateServantBy (parameter: string, parameterValue: string, servantToUpdate: Servant): Promise<Servant> {
-    const query = `UPDATE motion_blade.servant SET id=?,masterId=?,name=?,fatherProfession=?,youthProfession=?,currentAttributes=?,maximumAttributes=?,guard=?,buff=?,debuff=?,inventory=?,maestry=? WHERE ${parameter} = '${parameterValue}'`
-
-    await this.pool?.query(query, [servantToUpdate.id, servantToUpdate.masterId, servantToUpdate.name, servantToUpdate.fatherProfession, servantToUpdate.youthProfession, servantToUpdate.currentAttributes, servantToUpdate.maximumAttributes, servantToUpdate.guard, servantToUpdate.buff, servantToUpdate.debuff, servantToUpdate.inventory, servantToUpdate.maestry])
-
-    return servantToUpdate
-  }
-
-  async deleteServantBy (parameter: string, parameterValue: string): Promise<Servant | null> {
-    const servant = await this.fetchServantBy(parameter, parameterValue)
-    if (servant === null) return null
-    const query = `DELETE FROM motion_blade.servant WHERE ${parameter} = '${parameterValue}';`
-    await this.pool?.query(query, [servant.id, servant.masterId, servant.name, servant.fatherProfession, servant.youthProfession, servant.currentAttributes, servant.maximumAttributes, servant.guard, servant.buff, servant.debuff, servant.inventory, servant.maestry])
-    return servant
+  async deletePersonBy (parameter: string, parameterValue: string): Promise<DatabasePerson | null> {
+    const connection = await this.getConnectionFromPool()
+    const person = await this.fetchPersonBy(parameter, parameterValue)
+    await this.releaseConnection(connection)
+    if (person === null) return null
+    await connection.query(mariadbQueries.deletePersonRegistryBy, [parameter, parameterValue])
+    return person
   }
 }
 
