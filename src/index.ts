@@ -1,5 +1,5 @@
 import { BotFactory } from './bot/factory/BotFactory'
-import { DataSourceFactory } from './api/factory/DataSourceFactory'
+import { DataSourceFactory } from './data/factory/DataSourceFactory'
 import { APIFactory } from './api/factory/APIFactory'
 
 const main = async (): Promise<void> => {
