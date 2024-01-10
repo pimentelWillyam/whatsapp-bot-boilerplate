@@ -1,7 +1,7 @@
 import { APIFactory } from '../../api/factory/APIFactory'
 
 import * as request from 'supertest'
-import { DataSourceFactory } from '../../api/factory/DataSourceFactory'
+import { DataSourceFactory } from '../../data/factory/DataSourceFactory'
 
 // getting .env configuration
 
