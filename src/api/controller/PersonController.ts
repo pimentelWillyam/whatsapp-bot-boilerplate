@@ -8,16 +8,18 @@ import KnownError from '../validator/errors/KnownError'
 class PersonController implements IPersonController {
   constructor (readonly personService: IPersonService, readonly personValidator: IPersonValidator) {}
 
-  create (req: Request, res: Response): Response<any, Record<string, any>> {
+  async create (req: Request, res: Response): Promise<Response<any, Record<string, any>>> {
     const errorList = this.personValidator.validateCreation(req.body.name, req.body.email, req.body.age)
     if (errorList.length !== 0) return res.status(400).json({ errorList })
     try {
-      const person = this.personService.create(req.body.name, req.body.email, req.body.age)
+      const person = await this.personService.create(req.body.name, req.body.email, req.body.age)
       return res.status(201).json(person)
     } catch (error) {
+      console.error(error)
       if (error instanceof KnownError) {
         return res.status(error.status).send({ name: error.name, message: error.message })
       }
+
       return res.status(500).send({ name: 'Erro desconhecido', message: 'Um erro inesperado aconteceu durante a requisição' })
     }
   }
